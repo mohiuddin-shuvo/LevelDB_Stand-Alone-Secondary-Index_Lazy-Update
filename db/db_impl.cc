@@ -115,8 +115,7 @@ Options SanitizeOptions(const std::string& dbname,
     result.block_cache = NewLRUCache(8 << 20);
   }
 
-  // **** added 2014/04/23 - abhinand menon
-  // Set parameters for secondary index DB:
+ 
   if (src.using_s_index) {
     result.using_s_index = true;
     result.primary_key = src.primary_key;
@@ -188,8 +187,7 @@ DBImpl::~DBImpl() {
     delete options_.block_cache;
   }
 
-  // **** added 2014/04/23 - abhinand menon
-  // Delete secondary index DB:
+
   if (options_.using_s_index) {
     delete sdb;
   }
@@ -199,8 +197,7 @@ DBImpl::~DBImpl() {
 //*******************************************************************************************
 
 
-// **** added 2014/05/14 - abhinand menon
-// Helper function to deal with opaque JSON value
+
 std::string GetAttr(const rapidjson::Document& doc, const char* attr) {
   if(!doc.IsObject() || !doc.HasMember(attr) || doc[attr].IsNull())
     return "";
@@ -241,9 +238,6 @@ std::string GetAttr(const rapidjson::Document& doc, const char* attr) {
   return pKey.str();
 }
 
-
-// **** added 2014/05/14 - abhinand menon
-// Helper function to deal with opaque JSON value
  std::string GetVal(const rapidjson::Value& val) {
 
   std::ostringstream pKey;
@@ -1624,154 +1618,11 @@ Status DBImpl::Put(const WriteOptions& o, const Slice& key, const Slice& val) {
 
 
 Status DBImpl::Delete(const WriteOptions& options, const Slice& key) {
-
-  // **** modified 2014/05/30 - abhinand menon
-  // delete corresponding entry from secondary index db
-  if (this->options_.using_s_index) {
-    // obtain value being deleted
-    std::string value;
-    Status rstatus = this->Get(ReadOptions(), key, &value);
-
-    // report any error
-    if (!rstatus.ok()) return rstatus;
-
-    // parse value into json object
-    rapidjson::Document json_val;
-    json_val.Parse<0>(value.data());
-
-    // extract out primary and secondary keys
-    std::string pkey = key.ToString();
-    std::string skey = GetAttr(json_val, this->options_.secondary_key.c_str());
-
-    // obtain primary key list for this secondary key
-    std::string pkey_list;
-    Status sdb_rstatus = this->sdb->Get(ReadOptions(), skey, &pkey_list);
-
-    // report any error
-    if (!sdb_rstatus.ok()) return sdb_rstatus;
-
-    // parse key list
-    rapidjson::Document key_list;
-    key_list.Parse<0>(pkey_list.c_str());
-
-    std::string new_key_list = "[";
-    rapidjson::SizeType j = 0;
-
-   // copy into new key list and remove old primary key, maintain (write) order of keys
-    for (rapidjson::SizeType i = 0; i < key_list.Size(); i++)
-      if (GetVal(key_list[i]) != pkey) {
-        if (j != 0)
-          new_key_list += ",";
-        new_key_list += ("\"" + GetVal(key_list[i]) + "\"");
-        j++;
-      }
-
-    new_key_list += "]";
-
-    // write change into secondary index db
-    Status sdb_status;
-    if (new_key_list != "[]")
-      sdb_status = this->sdb->Put(options, skey, new_key_list);
-    else
-      sdb_status = this->sdb->Delete(options, skey);
-
-    // report any error
-    if (!sdb_status.ok())
-      return sdb_status;
-  }
-
-  WriteBatch batch;
-  batch.Delete(key);
-
-  return this->Write(options, &batch);
+ 
+  return DB::Delete(options, key);
 }
 
-/*
-// **** added 2014/05/30 - abhinand menon
-// Overloaded interface:
-Status DBImpl::Put(const WriteOptions& options, const Slice& value) {
-  // parse value into json object
-
-  rapidjson::Document json_val;
-  json_val.Parse<0>(value.data());
-
-  // extract out primary and secondary keys
-  std::string pkey = GetAttr(json_val, this->options_.primary_key.c_str());
-  std::string skey = GetAttr(json_val, this->options_.secondary_key.c_str());
-
-  // check if the secondary key already exists in the secondary index db
-  std::string pkey_list;
-  Status rstatus = this->sdb->Get(ReadOptions(), skey, &pkey_list);
-
-  // define variables for writing into secondary db
-  rapidjson::StringBuffer strbuf;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
-  Status sdb_status;
-
-  // entry for secondary key already exists in the secondary index db
-  if (rstatus.ok()) {
-    rapidjson::Document key_list;
-    key_list.Parse<0>(pkey_list.c_str());
-
-    bool old_pkey = false;
-    for (rapidjson::SizeType i = 0; i < key_list.Size(); i++) {
-      if (GetVal(key_list[i]) == pkey)
-        old_pkey = true;
-    }
-
-    // an existing primary key is being overwritten
-    if (old_pkey) {
-      std::string new_key_list = "[";
-      rapidjson::SizeType j = 0;
-
-      // copy into new key list and remove old primary key, maintain (write) order of keys
-      for (rapidjson::SizeType i = 0; i < key_list.Size(); i++)
-        if (GetVal(key_list[i]) != pkey) {
-          if (j != 0)
-            new_key_list += ",";
-          new_key_list += ("\"" + GetVal(key_list[i]) + "\"");
-          j++;
-        }
-
-    new_key_list += (",\"" + pkey + "\"]");
-
-    sdb_status = this->sdb->Put(options, skey, new_key_list);
-    }
-    // a new primary key is being added
-    else {
-      key_list.PushBack(pkey.c_str(), rapidjson::Document().GetAllocator());
-      key_list.Accept(writer);
-
-      // write list into secondary index db
-      sdb_status = this->sdb->Put(options, skey, strbuf.GetString());
-    }
-  }
-  // entry for secondary key doesn't exist in the secondary index db
-  else if (rstatus.IsNotFound()) {
-    rapidjson::Value key_list(rapidjson::kArrayType);
-    key_list.PushBack(pkey.c_str(), rapidjson::Document().GetAllocator());
-    key_list.Accept(writer);
-
-    // write list into secondary index db
-    sdb_status = this->sdb->Put(options, skey, strbuf.GetString());
-  }
-  // error with read
-  else return rstatus;
-
-
-  // remove primary key from json object and write value into primary db
-  json_val.RemoveMember(this->options_.primary_key.c_str());
-  rapidjson::StringBuffer pstrbuf;
-  rapidjson::Writer<rapidjson::StringBuffer> pwriter(pstrbuf);
-  json_val.Accept(pwriter);
-
-  Status db_status = this->Put(options, pkey, pstrbuf.GetString());
-
-  // return any errors, secondary db errors first
-  return sdb_status.ok() ? db_status : sdb_status;
-}
-*/
-
+ 
 Status DBImpl::Put(const WriteOptions& options, const Slice& value) {
   
   rapidjson::Document json_val;
@@ -1802,92 +1653,7 @@ Status DBImpl::Put(const WriteOptions& options, const Slice& value) {
   return sdb_status.ok() ? db_status : sdb_status;
 
 }
-/*
-// **** added 2014/05/30 - abhinand menon
-// Overloaded interface:
-Status DBImpl::Get(const ReadOptions& options, const Slice& skey, std::vector<KeyValuePair>* value_list) {
-  std::string pkey_list;
-  Status rstatus = this->sdb->Get(ReadOptions(), skey, &pkey_list);
-
-  // proceed if secondary key exists and there are no errors
-  if (rstatus.ok()) {
-    int num_records = options.num_records;
-    bool updated = false;
-    std::string new_key_list = "[";
-    int j = 0;
-
-    rapidjson::Document key_list;
-    key_list.Parse<0>(pkey_list.c_str());
-
-    rapidjson::SizeType i = key_list.Size() - 1;
-
-    // read requested number of records from primary db
-    while (num_records > 0 and (int)i >= 0) {
-      std::string pkey = GetVal(key_list[i]);
-      std::string value;
-      Status db_status = this->Get(options, pkey, &value);
-
-      // if there are no errors, push KV pair onto return vector, latest record first
-      // check for updated values
-      if (db_status.ok()) {
-        rapidjson::Document val;
-        val.Parse<0>(value.c_str());
-
-        // check for updates
-        if (skey == GetAttr(val, this->options_.secondary_key.c_str())) {
-          value_list->push_back(KeyValuePair(pkey, value));
-
-          //new_key_list.PushBack(pkey.c_str(), rapidjson::Document().GetAllocator());
-          if (j != 0)
-            new_key_list += ",";
-          new_key_list += ("\"" + pkey + "\"");
-          j++;
-        }
-        // trigger read repair
-        else
-          updated = true;
-      }
-      // trigger read repair
-      else if (db_status.IsNotFound())
-        updated = true;
-      // return any errors
-      else
-        return db_status;
-
-      num_records--;
-      i--;
-    }
-
-    // perform read repair
-    if (updated) {
-      // copy any unread primary keys into new list
-      while ((int)i >= 0) {
-        if (j != 0)
-          new_key_list += ",";
-        new_key_list += ("\"" + GetVal(key_list[i]) + "\"");
-        j++;
-        i--;
-      }
-
-      new_key_list += "]";
-
-      // write list into secondary index db
-      Status sdb_status;
-      if (new_key_list != "[]")
-        sdb_status = this->sdb->Put(WriteOptions(), skey, new_key_list);
-      else
-        sdb_status = this->sdb->Delete(WriteOptions(), skey);
-
-      if (!sdb_status.ok())
-        return sdb_status;
-    }
-  }
-
-  // return read status
-  return rstatus;
-}
-*/
-
+ 
 //*******************************************************************************************
 //
 Status DBImpl::Get(const ReadOptions& options, const Slice& skey, std::vector<KeyValuePair>* value_list) {

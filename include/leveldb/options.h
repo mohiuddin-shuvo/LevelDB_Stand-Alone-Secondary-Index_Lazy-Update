@@ -138,19 +138,14 @@ struct Options {
   // Default: NULL
   const FilterPolicy* filter_policy;
 
-  // **** added 2014/04/23 - abhinand menon
-  // Using secondary index
+
   bool using_s_index;
 
-  // **** added 2014/04/23 - abhinand menon
-  // Primary key value:
   std::string primary_key;
 
-  // **** added 2014/04/23 - abhinand menon
-  // Secondary key value:
+
   std::string secondary_key;
 
-  // Mohiuddin Abdul Qader
   bool isSecondaryDB;
   
   // Create an Options object with default values for all fields.

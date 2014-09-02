@@ -40,8 +40,7 @@ struct Range {
   Range(const Slice& s, const Slice& l) : start(s), limit(l) { }
 };
 
-// **** added 2014/02/28 - abhinand menon
-// The combination of return key and value for the overloaded Get method
+
 struct KeyValuePair {
   std::string key;
   std::string value;
