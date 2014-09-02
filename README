@@ -35,9 +35,10 @@ This API reads a record from database with the specified primary key. This is sa
 
 5. virtual Status Get(const ReadOptions& options, const Slice& skey, std::vector<SKeyReturnVal>* value, int kNoOfOutputs);
 
-This API is the new LOOKUP procedure which takes a secondary key and number of outputs K as input argument and return most recent top-K a record from database containing the specified secondary key.
+This API is the new LOOKUP procedure which takes a secondary key and ReadOptions as input argument. A new field in ReadOptions (num_records) has been added which has to be set to the number of K outputs that has to be  returned. This API then returns the most recent top-K a record from database containing the specified secondary key.
 
-The return value SKeyReturnVal contains key, value and the sequence_number of the resulting records.
+
+The return value KeyValuePair contains key and value of the resulting records.
 
 struct KeyValuePair {
   std::string key;
