@@ -1,9 +1,9 @@
-leveldb_embedded_secondary-index: A key-value store on top of leveldb supporting secondary embedded indexing.
+leveldb_standalone_secondary-index with lazy updates: A key-value store on top of leveldb supporting stand alone secondary indexing with lazy updates in the database.
 Authors: Mohiuddin Abdul Qader (mabdu002@cs.ucr.edu)
 leveldb version: 1.14.0
 
 The code under this directory implements a system for maintaining a
-persistent key/value store with index support for secondary attribute based on bloom filter and implements a lookup interface for query on secondary attribute returning most recent k records. 
+persistent key/value store with stand alone index support for secondary attribute with lazy updates and implements a lookup interface for query on secondary attribute returning most recent k records. 
 
 
 The Public APIs:
