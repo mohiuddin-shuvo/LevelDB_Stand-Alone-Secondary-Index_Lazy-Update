@@ -591,7 +591,7 @@ Status Version::Get( const ReadOptions& options, const LookupKey& k, std::vector
      * 
         */
       //outputFile<<num_files<<endl;
-    bool found = false;
+    //bool found = false;
     std::string val;
     for (uint32_t i = 0; i < num_files; ++i) {
       if (last_file_read != NULL && stats->seek_file == NULL) {
@@ -620,25 +620,72 @@ Status Version::Get( const ReadOptions& options, const LookupKey& k, std::vector
       
       if(s.ok() & !s.IsNotFound() && saver.state == kFound)
       {
+        
+        //outputFile<<user_key.ToString()<<"\n"<<saver.state<<"\n";
+        //if(level > 0)
+        {
+            //found = false;
+            rapidjson::Document key_list;
+
+            key_list.Parse<0>(val.c_str());
+            rapidjson::SizeType i = key_list.Size() - 1;
+            //outputFile<<i<<"\n";
+            // read requested number of records from primary db
+
+            while (kNoOfOutputs > 0 && (int)i >= 0) {
+                std::string pkey = V_GetVal(key_list[i]);
+                std::string pValue;
+                if(resultSetofKeysFound->find(pkey)==resultSetofKeysFound->end())
+                {
+                    Status db_status = db->Get(options, pkey, &pValue);
+
+                    // if there are no errors, push KV pair onto return vector, latest record first
+                    // check for updated values
+                    if (db_status.ok()&&!db_status.IsNotFound()) {
+                        //outputFile<<pkey<<"\n"<<pValue<<"\n";
+                        rapidjson::Document temp_val;
+                        temp_val.Parse<0>(pValue.c_str());
+                        //outputFile<<user_key.ToString()<<" ukey\n"<<secKey.c_str()<<std::endl;
+                        if (user_key.ToString() == V_GetAttr(temp_val, secKey.c_str())) {
+                           // outputFile<<"found3\n";
+                          value->push_back(KeyValuePair(pkey, pValue));
+                          resultSetofKeysFound->insert(pkey);
+                          kNoOfOutputs--;
+                        }
+                    }
+                }
+                i--;
+
+            }
+            
+            if(kNoOfOutputs<=0)
+            {
+                break;
+            }
+        }
+        /*
+        else  
+        {
           found = true;
-          //outputFile<<user_key.ToString()<<"\n"<<saver.state<<"\n";
           break;
-         
+        }
+        */
       }
       
       
       
     }
+    /*
     if(found)
     {
         //outputFile<<val.c_str()<<"found\n";
         rapidjson::Document key_list;
-         
+
         key_list.Parse<0>(val.c_str());
         rapidjson::SizeType i = key_list.Size() - 1;
         //outputFile<<i<<"\n";
         // read requested number of records from primary db
-       
+
         while (kNoOfOutputs > 0 && (int)i >= 0) {
             std::string pkey = V_GetVal(key_list[i]);
             std::string pValue;
@@ -662,7 +709,7 @@ Status Version::Get( const ReadOptions& options, const LookupKey& k, std::vector
                 }
             }
             i--;
-        
+
         }
         
         if(kNoOfOutputs<=0)
@@ -671,7 +718,10 @@ Status Version::Get( const ReadOptions& options, const LookupKey& k, std::vector
         }
        
     }
+     * */
   }
+  
+
 
    return s;
 }

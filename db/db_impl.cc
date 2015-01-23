@@ -1565,17 +1565,51 @@ Status DBImpl::Put(const WriteOptions& o, const Slice& key, const Slice& val) {
     }
     else
     {
-        SequenceNumber snapshot = versions_->LastSequence();
+        //std::ofstream outputFile;
+        //outputFile.open("/Users/nakshikatha/Desktop/test codes/debug3.txt", std::ofstream::out | std::ofstream::app);
+         
+        Status mems,imms;
+        std::string mem_pkey_list;
+        std::string imm_pkey_list;
+        SequenceNumber snapshot;
+         
+        snapshot = versions_->LastSequence();
+        
+
+        MemTable* mem = mem_;
+        //MemTable* imm = imm_;
+         
+        mem->Ref();
+        
+         
+        bool have_stat_update = false;
+        Version::GetStats stats;
+        bool memfound;//immfound;
+        // Unlock while reading from files and memtables
+        {
+          //mutex_.Unlock();
+          // First look in the memtable, then in the immutable memtable (if any).
+          LookupKey lkey(key, snapshot);
+          memfound = mem->Get(lkey, &mem_pkey_list, &mems);
+          
+            // Done
+          /* if (imm != NULL ) {
+               immfound = imm->Get(lkey, imm_pkey_list, &imms);
+                
+           }
+           * */
+            // Done
+           
+          //mutex_.Lock();
+        }
+
     
-        LookupKey mkey(key,snapshot); 
-        Status s;
-        std::string pkey_list;
-        bool found = mem_->Get(mkey, &pkey_list, &s);
-        if(found && s.ok() && !s.IsNotFound())
+        
+        if(memfound && mems.ok() && !mems.IsNotFound())
         {
             
             rapidjson::Document key_list;
-            key_list.Parse<0>(pkey_list.c_str());
+            key_list.Parse<0>(mem_pkey_list.c_str());
             
             rapidjson::Document input_key_list;
             input_key_list.Parse<0>(val.data());
@@ -1605,10 +1639,12 @@ Status DBImpl::Put(const WriteOptions& o, const Slice& key, const Slice& val) {
         
           
           Slice newval = new_key_list;
+          mem->Unref();
           return DB::Put(o, key, newval); 
         }
         else
         {
+            mem->Unref();
             return DB::Put(o, key, val);
         }
  
@@ -1703,8 +1739,8 @@ Status DBImpl::SGet(const ReadOptions& options, const Slice& skey, std::vector<K
         
         //Perform Read Repair by Get(pKey) on memtable values
     
-        rapidjson::SizeType i = mem_key_list.Size() - 1;
-        while (kNoOfOutputs>0&&(int)i >= 0) {
+        int i = mem_key_list.Size() - 1;
+        while (kNoOfOutputs>0&& i >= 0) {
             std::string pkey = GetVal(mem_key_list[i]);
             std::string pValue;
             
@@ -1743,8 +1779,8 @@ Status DBImpl::SGet(const ReadOptions& options, const Slice& skey, std::vector<K
            
            //Perform Read Repair by Get(pKey) on memtable values
     
-            rapidjson::SizeType i = imm_key_list.Size() - 1;
-            while (kNoOfOutputs>0&&(int)i >= 0) {
+            int i = imm_key_list.Size() - 1;
+            while (kNoOfOutputs>0&& i >= 0) {
                 std::string pkey = GetVal(imm_key_list[i]);
                 std::string pValue;
                 if(resultSetofKeysFound.find(pkey)==resultSetofKeysFound.end())
