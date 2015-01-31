@@ -1675,8 +1675,8 @@ Status DBImpl::Put(const WriteOptions& options, const Slice& value) {
   
   Slice sk = skey;
   Slice pk = pkey;
-  
-  sdb_status = this->sdb->Put(options, skey, new_key_list);
+  if(!skey.empty())
+    sdb_status = this->sdb->Put(options, skey, new_key_list);
   
   json_val.RemoveMember(this->options_.primary_key.c_str());
   rapidjson::StringBuffer pstrbuf;
